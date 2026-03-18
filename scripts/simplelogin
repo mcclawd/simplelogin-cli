@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+#
+# simplelogin - CLI for SimpleLogin email aliases
+# 
+# Usage: simplelogin [command] [options]
+#
+# Agent Mode: Set SIMPLELOGIN_JSON=true for machine-readable JSON output
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_DIR="$(dirname "$SCRIPT_DIR")"
+API_BASE="https://app.simplelogin.io/api"
+
+# Colors (disable for JSON mode)
+if [[ -t 1 && "${SIMPLELOGIN_JSON:-}" != "true" ]]; then
+    GREEN='\033[0;32m'
+    RED='\033[0;31m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+else
+    GREEN='' RED='' YELLOW='' BLUE='' NC=''
+fi
+
+# Logging functions
+if [[ "${SIMPLELOGIN_JSON:-}" == "true" ]]; then
+    log_info() { :; }   # No-op in JSON mode
+    log_success() { :; }
+    log_error() { echo "{\"error\": \"$1\", \"status\": \"error\"}" >&2; }
+    log_warn() { :; }
+else
+    log_info() { echo -e "${BLUE}ℹ${NC} $1"; }
+    log_success() { echo -e "${GREEN}✓${NC} $1"; }
+    log_error() { echo -e "${RED}✗${NC} $1"; }
+    log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+fi
+
+# Get API key from environment or credential manager
+get_api_key() {
+    local api_key
+    
+    # Priority 1: Environment variable (most common)
+    if [[ -n "${SIMPLELOGIN_API_KEY:-}" ]]; then
+        echo "$SIMPLELOGIN_API_KEY"
+        return 0
+    fi
+    
+    # Priority 2: Check if credential manager helper exists (e.g., Warden)
+    if command -v warden &> /dev/null; then
+        api_key=$(warden get simplelogin api_key 2>/dev/null || echo "")
+        if [[ -n "$api_key" ]]; then
+            echo "$api_key"
+            return 0
+        fi
+    fi
+    
+    # Error: No API key found
+    log_error "SimpleLogin API key not found"
+    if [[ "${SIMPLELOGIN_JSON:-}" != "true" ]]; then
+        echo "Please set SIMPLELOGIN_API_KEY environment variable"
+        echo "Or configure a credential manager (Bitwarden, 1Password, etc.)"
+    fi
+    return 1
+}
+
+# Get available suffixes from SimpleLogin
+get_suffixes() {
+    local api_key
+    api_key=$(get_api_key) || return 1
+    
+    curl -s -H "Authentication: $api_key" "${API_BASE}/v5/alias/options" | jq -r '.suffixes[] | select(.is_premium == false) | .signed_suffix' | head -5
+}
+
+# Get default mailbox
+get_default_mailbox() {
+    local api_key
+    api_key=$(get_api_key) || return 1
+    
+    curl -s -H "Authentication: $api_key" "${API_BASE}/mailboxes" | jq -r '.mailboxes[0].id'
+}
+
+# Create custom alias
+cmd_create() {
+    local prefix=""
+    local note=""
+    local hostname=""
+    local mailbox_id=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --note|-n)
+                note="$2"
+                shift 2
+                ;;
+            --for|-f)
+                hostname="$2"
+                shift 2
+                ;;
+            --mailbox|-m)
+                mailbox_id="$2"
+                shift 2
+                ;;
+            --help|-h)
+                echo "Usage: simplelogin create [prefix] [options]"
+                echo ""
+                echo "Options:"
+                echo "  --note, -n       Add a note to the alias"
+                echo "  --for, -f        Suggest alias based on hostname"
+                echo "  --mailbox, -m    Specify mailbox ID"
+                echo ""
+                echo "Examples:"
+                echo "  simplelogin create shopping"
+                echo "  simplelogin create amazon --note 'Prime member'"
+                echo "  simplelogin create --for github.com"
+                return 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+            *)
+                prefix="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    # Auto-generate prefix from hostname if provided
+    if [[ -z "$prefix" && -n "$hostname" ]]; then
+        prefix=$(echo "$hostname" | sed 's/www\.//; s/\.com//; s/\.org//; s/\.net//' | cut -d. -f1)
+        log_info "Auto-generated prefix: $prefix"
+    fi
+    
+    if [[ -z "$prefix" ]]; then
+        log_error "Prefix required (or use --for hostname)"
+        return 1
+    fi
+    
+    local api_key suffix signed_suffix
+    api_key=$(get_api_key) || return 1
+    
+    # Get first available suffix
+    signed_suffix=$(curl -s -H "Authentication: $api_key" "${API_BASE}/v5/alias/options" | jq -r '.suffixes[] | select(.is_premium == false) | .signed_suffix' | head -1)
+    
+    if [[ -z "$signed_suffix" ]]; then
+        log_error "No available suffixes found"
+        return 1
+    fi
+    
+    # Get default mailbox if not specified
+    if [[ -z "$mailbox_id" ]]; then
+        mailbox_id=$(get_default_mailbox)
+    fi
+    
+    # Build request
+    local json_data
+    json_data=$(jq -n \
+        --arg prefix "$prefix" \
+        --arg suffix "$signed_suffix" \
+        --argjson mailbox "[$mailbox_id]" \
+        --arg note "$note" \
+        '{alias_prefix: $prefix, signed_suffix: $suffix, mailbox_ids: $mailbox, note: $note}')
+    
+    # Create alias
+    local response
+    response=$(curl -s -X POST \
+        -H "Authentication: $api_key" \
+        -H "Content-Type: application/json" \
+        "${API_BASE}/v3/alias/custom/new" \
+        -d "$json_data")
+    
+    # Check for errors
+    if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+        log_error "Failed to create alias: $(echo "$response" | jq -r '.error')"
+        return 1
+    fi
+    
+    # Success
+    local email alias_id
+    email=$(echo "$response" | jq -r '.email')
+    alias_id=$(echo "$response" | jq -r '.id')
+    
+    if [[ "${SIMPLELOGIN_JSON:-}" == "true" ]]; then
+        # JSON output for agents
+        echo "$response" | jq -c '{email, id, note: .note, status: "created"}'
+    else
+        # Human output
+        log_success "Created alias: $email"
+        if [[ -n "$note" ]]; then
+            echo "  Note: $note"
+        fi
+    fi
+}
+
+# Create random alias
+cmd_random() {
+    local note=""
+    local mode=""
+    local mailbox_id=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --note|-n)
+                note="$2"
+                shift 2
+                ;;
+            --word|-w)
+                mode="word"
+                shift
+                ;;
+            --mailbox|-m)
+                mailbox_id="$2"
+                shift 2
+                ;;
+            --help|-h)
+                echo "Usage: simplelogin random [options]"
+                echo ""
+                echo "Options:"
+                echo "  --note, -n    Add a note to the alias"
+                echo "  --word, -w    Use word-based random alias"
+                echo "  --mailbox, -m Specify mailbox ID"
+                return 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+            *)
+                log_error "Unknown argument: $1"
+                return 1
+                ;;
+        esac
+    done
+    
+    local api_key
+    api_key=$(get_api_key) || return 1
+    
+    # Build request
+    local json_data="{}"
+    if [[ -n "$note" ]]; then
+        json_data=$(jq -n --arg note "$note" '{note: $note}')
+    fi
+    
+    # Query params
+    local query=""
+    if [[ -n "$mode" ]]; then
+        query="?mode=$mode"
+    fi
+    
+    # Create random alias
+    local response
+    response=$(curl -s -X POST \
+        -H "Authentication: $api_key" \
+        -H "Content-Type: application/json" \
+        "${API_BASE}/alias/random/new${query}" \
+        -d "$json_data")
+    
+    # Check for errors
+    if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+        log_error "Failed to create alias: $(echo "$response" | jq -r '.error')"
+        return 1
+    fi
+    
+    # Success
+    local email
+    email=$(echo "$response" | jq -r '.email')
+    log_success "Created random alias: $email"
+    
+    if [[ -n "$note" ]]; then
+        echo "  Note: $note"
+    fi
+}
+
+# List aliases
+cmd_list() {
+    local all=false
+    local filter=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --all|-a)
+                all=true
+                shift
+                ;;
+            --domain|-d)
+                filter="domain"
+                shift
+                ;;
+            --enabled)
+                filter="enabled"
+                shift
+                ;;
+            --disabled)
+                filter="disabled"
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: simplelogin list [options]"
+                echo ""
+                echo "Options:"
+                echo "  --all, -a      Show all aliases"
+                echo "  --domain, -d   Filter by domain"
+                echo "  --enabled      Show only enabled aliases"
+                echo "  --disabled     Show only disabled aliases"
+                return 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    
+    local api_key
+    api_key=$(get_api_key) || return 1
+    
+    log_info "Fetching aliases..."
+    
+    # Get aliases (limit to 20 for now)
+    local response
+    response=$(curl -s -H "Authentication: $api_key" "${API_BASE}/v2/aliases?page_id=0")
+    
+    # Display
+    echo ""
+    echo "$response" | jq -r '.aliases[] | [.email, (if .enabled then "enabled" else "disabled" end), (.note // "-")] | @tsv' | column -t -s $'\t'
+    echo ""
+}
+
+# Disable alias
+cmd_disable() {
+    local alias_email="$1"
+    
+    if [[ -z "$alias_email" ]]; then
+        log_error "Alias email required"
+        return 1
+    fi
+    
+    local api_key alias_id
+    api_key=$(get_api_key) || return 1
+    
+    # Find alias ID
+    alias_id=$(curl -s -H "Authentication: $api_key" "${API_BASE}/v2/aliases?page_id=0" | jq -r --arg email "$alias_email" '.aliases[] | select(.email == $email) | .id')
+    
+    if [[ -z "$alias_id" ]]; then
+        log_error "Alias not found: $alias_email"
+        return 1
+    fi
+    
+    # Disable
+    curl -s -X POST -H "Authentication: $api_key" "${API_BASE}/aliases/${alias_id}/toggle" > /dev/null
+    log_success "Disabled: $alias_email"
+}
+
+# Enable alias
+cmd_enable() {
+    local alias_email="$1"
+    
+    if [[ -z "$alias_email" ]]; then
+        log_error "Alias email required"
+        return 1
+    fi
+    
+    local api_key alias_id
+    api_key=$(get_api_key) || return 1
+    
+    # Find alias ID
+    alias_id=$(curl -s -H "Authentication: $api_key" "${API_BASE}/v2/aliases?page_id=0" | jq -r --arg email "$alias_email" '.aliases[] | select(.email == $email) | .id')
+    
+    if [[ -z "$alias_id" ]]; then
+        log_error "Alias not found: $alias_email"
+        return 1
+    fi
+    
+    # Enable
+    curl -s -X POST -H "Authentication: $api_key" "${API_BASE}/aliases/${alias_id}/toggle" > /dev/null
+    log_success "Enabled: $alias_email"
+}
+
+# Delete alias
+cmd_delete() {
+    local alias_email="$1"
+    
+    if [[ -z "$alias_email" ]]; then
+        log_error "Alias email required"
+        return 1
+    fi
+    
+    local api_key alias_id
+    api_key=$(get_api_key) || return 1
+    
+    # Find alias ID
+    alias_id=$(curl -s -H "Authentication: $api_key" "${API_BASE}/v2/aliases?page_id=0" | jq -r --arg email "$alias_email" '.aliases[] | select(.email == $email) | .id')
+    
+    if [[ -z "$alias_id" ]]; then
+        log_error "Alias not found: $alias_email"
+        return 1
+    fi
+    
+    # Confirm
+    read -p "Delete $alias_email? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Cancelled"
+        return 0
+    fi
+    
+    # Delete
+    curl -s -X DELETE -H "Authentication: $api_key" "${API_BASE}/aliases/${alias_id}" > /dev/null
+    log_success "Deleted: $alias_email"
+}
+
+# Main dispatcher
+main() {
+    local cmd="${1:-}"
+    shift || true
+    
+    case "$cmd" in
+        create)
+            cmd_create "$@"
+            ;;
+        random)
+            cmd_random "$@"
+            ;;
+        list|ls)
+            cmd_list "$@"
+            ;;
+        disable)
+            cmd_disable "$@"
+            ;;
+        enable)
+            cmd_enable "$@"
+            ;;
+        delete|rm)
+            cmd_delete "$@"
+            ;;
+        --help|-h|help)
+            cat << 'EOF'
+SimpleLogin CLI - Email alias management
+
+USAGE:
+    simplelogin create [prefix] [options]   Create custom alias
+    simplelogin random [options]            Create random alias
+    simplelogin list [options]              List aliases
+    simplelogin disable <alias>             Disable alias
+    simplelogin enable <alias>              Enable alias
+    simplelogin delete <alias>              Delete alias
+
+EXAMPLES:
+    simplelogin create shopping
+    simplelogin create amazon --note "Prime member"
+    simplelogin create --for github.com
+    simplelogin random --note "Newsletter"
+    simplelogin list
+    simplelogin disable shopping@sl.farofa.work
+
+For more help: simplelogin <command> --help
+EOF
+            ;;
+        *)
+            if [[ -z "$cmd" ]]; then
+                log_error "Command required"
+                echo "Run 'simplelogin --help' for usage"
+                return 1
+            else
+                log_error "Unknown command: $cmd"
+                echo "Run 'simplelogin --help' for usage"
+                return 1
+            fi
+            ;;
+    esac
+}
+
+main "$@"
