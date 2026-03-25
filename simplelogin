@@ -1,0 +1,152 @@
+#!/bin/bash
+# SimpleLogin CLI - Create and manage email aliases
+# Usage: simplelogin [command] [options]
+
+set -e
+
+API_KEY="${SIMPLELOGIN_API_KEY:-}"
+API_URL="https://app.simplelogin.io/api/v2"
+JSON_OUTPUT="${SIMPLELOGIN_JSON:-false}"
+
+# Check API key
+if [ -z "$API_KEY" ] && [ -f "$HOME/.openclaw/secrets/simplelogin.json" ]; then
+    API_KEY=$(jq -r '.password // .api_key // empty' "$HOME/.openclaw/secrets/simplelogin.json" 2>/dev/null)
+fi
+
+if [ -z "$API_KEY" ]; then
+    echo "Error: SIMPLELOGIN_API_KEY not set" >&2
+    exit 1
+fi
+
+# Default mailbox configuration
+DEFAULT_MAILBOX_ID="${SIMPLELOGIN_MAILBOX_ID:-}"  # Will auto-select first if not set
+
+# Helper functions
+api_call() {
+    local method="$1"
+    local endpoint="$2"
+    local data="${3:-}"
+    
+    local curl_opts="-s -H \"Authorization: Bearer $API_KEY\" -H \"Content-Type: application/json\""
+    
+    if [ -n "$data" ]; then
+        curl $curl_opts -X "$method" "${API_URL}${endpoint}" -d "$data"
+    else
+        curl $curl_opts -X "$method" "${API_URL}${endpoint}"
+    fi
+}
+
+output_json() {
+    if [ "$JSON_OUTPUT" = "true" ]; then
+        cat
+    else
+        jq -r '.email // .aliases[0].email // .alias // empty' 2>/dev/null || cat
+    fi
+}
+
+# Commands
+cmd_create() {
+    local prefix=""
+    local note=""
+    local for_host=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --note|-n) note="$2"; shift 2 ;;
+            --for|-f) for_host="$2"; shift 2 ;;
+            --*) shift ;;
+            *) prefix="$1"; shift ;;
+        esac
+    done
+    
+    # Auto-generate prefix if --for is provided
+    if [ -n "$for_host" ] && [ -z "$prefix" ]; then
+        prefix=$(echo "$for_host" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+    fi
+    
+    local json_data="{\"name\": \"${prefix}\""
+    if [ -n "$note" ]; then
+        json_data="${json_data}, \"note\": \"${note}\""
+    fi
+    json_data="${json_data}}"
+    
+    api_call POST "/alias/custom/new" "$json_data" | output_json
+}
+
+cmd_random() {
+    local note=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --note|-n) note="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+    
+    local json_data="{}"
+    if [ -n "$note" ]; then
+        json_data="{\"note\": \"${note}\"}"
+    fi
+    
+    api_call POST "/alias/random/new" "$json_data" | output_json
+}
+
+cmd_list() {
+    api_call GET "/alias" | jq '.aliases | .[] | .email' -r 2>/dev/null | head -20
+}
+
+cmd_disable() {
+    local email="$1"
+    local alias_id=$(api_call GET "/alias" | jq -r ".aliases[] | select(.email == \"$email\") | .id")
+    if [ -n "$alias_id" ]; then
+        api_call POST "/aliases/${alias_id}/toggle" '{}'
+        echo "Disabled: $email"
+    fi
+}
+
+cmd_enable() {
+    local email="$1"
+    local alias_id=$(api_call GET "/alias" | jq -r ".aliases[] | select(.email == \"$email\") | .id")
+    if [ -n "$alias_id" ]; then
+        api_call POST "/aliases/${alias_id}/toggle" '{}'
+        echo "Enabled: $email"
+    fi
+}
+
+# Main
+case "${1:-}" in
+    create|new)
+        shift
+        cmd_create "$@"
+        ;;
+    random)
+        shift
+        cmd_random "$@"
+        ;;
+    list|ls)
+        cmd_list
+        ;;
+    disable)
+        shift
+        cmd_disable "$@"
+        ;;
+    enable)
+        shift
+        cmd_enable "$@"
+        ;;
+    *)
+        echo "Usage: simplelogin [create|random|list|disable|enable] [options]"
+        echo ""
+        echo "Commands:"
+        echo "  create [prefix] [--note text] [--for hostname]  Create custom alias"
+        echo "  random [--note text]                            Create random alias"
+        echo "  list                                            List recent aliases"
+        echo "  disable <email>                                 Disable an alias"
+        echo "  enable <email>                                  Enable an alias"
+        echo ""
+        echo "Environment:"
+        echo "  SIMPLELOGIN_API_KEY    Your SimpleLogin API key"
+        echo "  SIMPLELOGIN_JSON=true  Output JSON instead of plain text"
+        exit 1
+        ;;
+esac
