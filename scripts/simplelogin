@@ -47,7 +47,7 @@ get_api_key() {
         return 0
     fi
     
-    # Priority 2: Check if credential manager helper exists (e.g., Warden)
+    # Priority 2: Check if credential manager helper exists
     if command -v warden &> /dev/null; then
         api_key=$(warden get simplelogin api_key 2>/dev/null || echo "")
         if [[ -n "$api_key" ]]; then
