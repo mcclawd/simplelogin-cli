@@ -5,7 +5,7 @@
 set -e
 
 API_KEY="${SIMPLELOGIN_API_KEY:-}"
-API_URL="https://app.simplelogin.io/api/v2"
+API_URL="https://app.simplelogin.io/api"
 JSON_OUTPUT="${SIMPLELOGIN_JSON:-false}"
 
 # Check API key
@@ -27,12 +27,10 @@ api_call() {
     local endpoint="$2"
     local data="${3:-}"
     
-    local curl_opts="-s -H \"Authorization: Bearer $API_KEY\" -H \"Content-Type: application/json\""
-    
     if [ -n "$data" ]; then
-        curl $curl_opts -X "$method" "${API_URL}${endpoint}" -d "$data"
+        curl -s -H "Authentication: $API_KEY" -H "Content-Type: application/json" -X "$method" "${API_URL}${endpoint}" -d "$data"
     else
-        curl $curl_opts -X "$method" "${API_URL}${endpoint}"
+        curl -s -H "Authentication: $API_KEY" -H "Content-Type: application/json" -X "$method" "${API_URL}${endpoint}"
     fi
 }
 
@@ -92,12 +90,12 @@ cmd_random() {
 }
 
 cmd_list() {
-    api_call GET "/alias" | jq '.aliases | .[] | .email' -r 2>/dev/null | head -20
+    api_call GET "/aliases?page_id=0" | jq '.aliases | .[] | .email' -r 2>/dev/null | head -20
 }
 
 cmd_disable() {
     local email="$1"
-    local alias_id=$(api_call GET "/alias" | jq -r ".aliases[] | select(.email == \"$email\") | .id")
+    local alias_id=$(api_call GET "/aliases?page_id=0" | jq -r ".aliases[] | select(.email == \"$email\") | .id")
     if [ -n "$alias_id" ]; then
         api_call POST "/aliases/${alias_id}/toggle" '{}'
         echo "Disabled: $email"
@@ -106,11 +104,64 @@ cmd_disable() {
 
 cmd_enable() {
     local email="$1"
-    local alias_id=$(api_call GET "/alias" | jq -r ".aliases[] | select(.email == \"$email\") | .id")
+    local alias_id=$(api_call GET "/aliases?page_id=0" | jq -r ".aliases[] | select(.email == \"$email\") | .id")
     if [ -n "$alias_id" ]; then
         api_call POST "/aliases/${alias_id}/toggle" '{}'
         echo "Enabled: $email"
     fi
+}
+
+cmd_contact_create() {
+    local alias_email="$1"
+    local contact_email="$2"
+    
+    if [ -z "$alias_email" ] || [ -z "$contact_email" ]; then
+        echo "Usage: simplelogin contact-create <alias_email> <contact_email>" >&2
+        echo "Example: simplelogin contact-create shopping@example.com support@vendor.com" >&2
+        exit 1
+    fi
+    
+    # Get alias ID from email
+    local alias_id=$(api_call GET "/aliases?page_id=0" | jq -r ".aliases[] | select(.email == \"$alias_email\") | .id")
+    if [ -z "$alias_id" ] || [ "$alias_id" = "null" ]; then
+        echo "Error: Alias not found: $alias_email" >&2
+        exit 1
+    fi
+    
+    # Create contact
+    local response=$(api_call POST "/aliases/${alias_id}/contacts" "{\"contact\": \"${contact_email}\"}")
+    
+    if [ "$JSON_OUTPUT" = "true" ]; then
+        echo "$response"
+    else
+        local reverse_alias=$(echo "$response" | jq -r '.reverse_alias_address // .reverse_alias | gsub("[<>\"]"; "")')
+        local existed=$(echo "$response" | jq -r '.existed')
+        
+        if [ "$existed" = "true" ]; then
+            echo "Contact already exists for $contact_email"
+        else
+            echo "Contact created for $contact_email"
+        fi
+        echo "Reverse alias: $reverse_alias"
+        echo "Send emails to this address → forwards through $alias_email"
+    fi
+}
+
+cmd_contact_list() {
+    local alias_email="$1"
+    
+    if [ -z "$alias_email" ]; then
+        echo "Usage: simplelogin contact-list <alias_email>" >&2
+        exit 1
+    fi
+    
+    local alias_id=$(api_call GET "/aliases?page_id=0" | jq -r ".aliases[] | select(.email == \"$alias_email\") | .id")
+    if [ -z "$alias_id" ] || [ "$alias_id" = "null" ]; then
+        echo "Error: Alias not found: $alias_email" >&2
+        exit 1
+    fi
+    
+    api_call GET "/aliases/${alias_id}/contacts?page_id=0" | jq -r '.contacts[] | "\(.contact) → \(.reverse_alias_address // .reverse_alias | gsub("[<>\"]"; ""))"' 2>/dev/null
 }
 
 # Main
@@ -134,8 +185,16 @@ case "${1:-}" in
         shift
         cmd_enable "$@"
         ;;
+    contact-create|contact)
+        shift
+        cmd_contact_create "$@"
+        ;;
+    contact-list|contacts)
+        shift
+        cmd_contact_list "$@"
+        ;;
     *)
-        echo "Usage: simplelogin [create|random|list|disable|enable] [options]"
+        echo "Usage: simplelogin [create|random|list|disable|enable|contact-create|contact-list] [options]"
         echo ""
         echo "Commands:"
         echo "  create [prefix] [--note text] [--for hostname]  Create custom alias"
@@ -143,6 +202,8 @@ case "${1:-}" in
         echo "  list                                            List recent aliases"
         echo "  disable <email>                                 Disable an alias"
         echo "  enable <email>                                  Enable an alias"
+        echo "  contact-create <alias> <contact>                Create contact, get reverse alias"
+        echo "  contact-list <alias>                            List contacts for an alias"
         echo ""
         echo "Environment:"
         echo "  SIMPLELOGIN_API_KEY    Your SimpleLogin API key"

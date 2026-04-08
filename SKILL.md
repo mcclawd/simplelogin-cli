@@ -26,6 +26,8 @@ Create and manage privacy-focused email aliases with SimpleLogin. Protect your r
 - ✅ Enable/disable aliases on demand
 - ✅ Smart hostname detection (auto-suggests alias based on website)
 - ✅ Multiple mailbox support
+- ✅ **Create contacts & get reverse aliases** (reply to forwarded emails)
+- ✅ **List contacts** for any alias
 - ✅ Secure API key management
 
 ## Prerequisites
@@ -115,6 +117,33 @@ simplelogin enable shopping@yourdomain.com
 simplelogin delete shopping@yourdomain.com
 ```
 
+### Create Contacts & Get Reverse Aliases
+
+When you receive a forwarded email and want to **reply** to the sender, you need to create a contact for your alias. This gives you a reverse alias email address that forwards through your alias.
+
+```bash
+# Create contact for an alias (get reverse alias)
+simplelogin contact-create <alias_email> <contact_email>
+# → Reverse alias: xxxxx@simplelogin.co
+# → Send emails to this address → forwards through your alias
+
+# List all contacts for an alias
+simplelogin contact-list <alias_email>
+# → support@example.com → xxxxx@simplelogin.co
+```
+
+**Use case:** You signed up for a service using `shopping@yourdomain.com`. They sent an email to your real mailbox. To reply, create a contact:
+
+```bash
+simplelogin contact-create shopping@yourdomain.com support@example.com
+# → Reverse alias: bncxsoitvfvzjlxtohfzzq@simplelogin.co
+
+# Now send your reply to the reverse alias
+echo "My reply" | mail -s "Re: Your subject" bncxsoitvfvzjlxtohfzzq@simplelogin.co
+```
+
+The email will appear to come from `shopping@yourdomain.com`, keeping your real mailbox private.
+
 ## API Reference
 
 ### simplelogin create [prefix]
@@ -169,6 +198,39 @@ Manage existing aliases.
 simplelogin disable shopping@yourdomain.com
 simplelogin enable shopping@yourdomain.com
 simplelogin delete temp@simplelogin.com
+```
+
+### simplelogin contact-create <alias> <contact>
+
+Create a contact for an alias and get the reverse alias address.
+
+**Arguments:**
+- `alias` - Your alias email (e.g., `shopping@yourdomain.com`)
+- `contact` - The contact's email address (e.g., `support@vendor.com`)
+
+**Examples:**
+```bash
+simplelogin contact-create shopping@yourdomain.com support@vendor.com
+# → Contact already exists for support@vendor.com
+# → Reverse alias: bncxsoitvfvzjlxtohfzzq@simplelogin.co
+# → Send emails to this address → forwards through shopping@yourdomain.com
+```
+
+**What is a reverse alias?**
+A reverse alias is a special email address that, when you send to it, forwards through your SimpleLogin alias and appears to come from your alias (hiding your real mailbox). This is how you reply to emails that were forwarded to you.
+
+### simplelogin contact-list <alias>
+
+List all contacts for an alias with their reverse aliases.
+
+**Arguments:**
+- `alias` - Your alias email
+
+**Examples:**
+```bash
+simplelogin contact-list shopping@yourdomain.com
+# → support@vendor.com → bncxsoitvfvzjlxtohfzzq@simplelogin.co
+# → info@newsletter.com → atltfoczaqdtplypkciksufkpsnjpiqzvrnqrfptjjyxgomx@simplelogin.co
 ```
 
 ## Agent/JSON Mode
