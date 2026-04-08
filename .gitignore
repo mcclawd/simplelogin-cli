@@ -1,0 +1,7 @@
+# QA feedback - internal use only, not published to ClawHub
+skill-qa/
+*.qa.md
+*.feedback.md
+*.backlog.md
+*.scores.json
+qa-summary.md
