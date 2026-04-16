@@ -237,7 +237,7 @@ Create a contact (recipient) for an alias, enabling you to send emails FROM the 
 **Examples:**
 ```bash
 simplelogin contact-create amazon@alias.com refunds@merchant.com
-simplelogin create --for nordvpn.com support@nordvpn.com  # Auto-suggests alias
+simplelogin create --for example.com support@example.com  # Auto-suggests alias
 ```
 
 ### simplelogin contact-list <alias>

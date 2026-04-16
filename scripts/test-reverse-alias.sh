@@ -19,7 +19,7 @@ fi
 
 if [ -z "$ALIAS_EMAIL" ] || [ -z "$CONTACT_EMAIL" ]; then
     echo "Usage: test-reverse-alias.sh <alias_email> <contact_email>"
-    echo "Example: test-reverse-alias.sh nordvpm@aleeas.com support@nordvpn.com"
+    echo "Example: test-reverse-alias.sh test-alias@simplelogin.com support@example.com"
     exit 1
 fi
 
