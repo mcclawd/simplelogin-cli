@@ -1,0 +1,299 @@
+{
+  "reviewMetadata": {
+    "reviewer": "Claude/Anthropic Perspective",
+    "skillName": "simplelogin-cli",
+    "skillVersion": "1.0.0",
+    "reviewDate": "2026-04-08",
+    "skillLocation": "/root/.openclaw/workspace/skills/simplelogin-cli/",
+    "timeSpentMinutes": 45,
+    "filesAnalyzed": [
+      "SKILL.md",
+      "README.md",
+      "simplelogin",
+      "scripts/simplelogin",
+      "package.json",
+      "LICENSE"
+    ],
+    "linesOfCodeReviewed": 500
+  },
+  "scores": {
+    "overall": 7.8,
+    "categories": {
+      "documentationClarity": {
+        "score": 8.5,
+        "maxScore": 10,
+        "weight": 1.0,
+        "summary": "Clear and comprehensive documentation with good examples. README and SKILL.md overlap unnecessarily.",
+        "strengths": [
+          "Well-structured feature lists",
+          "Multiple configuration options documented",
+          "Rich usage examples",
+          "Good troubleshooting section"
+        ],
+        "weaknesses": [
+          "README duplicates SKILL.md content",
+          "No installation verification step",
+          "Missing version information in SKILL.md",
+          "Placeholder URLs not updated"
+        ]
+      },
+      "documentationCompleteness": {
+        "score": 7.5,
+        "maxScore": 10,
+        "weight": 1.0,
+        "summary": "Covers most use cases but missing API limitations, rate limits, and contribution guidelines.",
+        "strengths": [
+          "All main commands documented",
+          "Contact/reverse alias feature well-explained",
+          "Agent/JSON mode documented"
+        ],
+        "weaknesses": [
+          "No API rate limits mentioned",
+          "Missing free vs. premium feature comparison",
+          "No contribution guidelines",
+          "No CHANGELOG or version history"
+        ]
+      },
+      "easeOfInstallation": {
+        "score": 6.5,
+        "maxScore": 10,
+        "weight": 1.0,
+        "summary": "Installation instructions incomplete for manual setup. ClawHub integration mentioned but may not be published.",
+        "strengths": [
+          "Simple ClawHub install (when available)",
+          "Clear prerequisites listed"
+        ],
+        "weaknesses": [
+          "Manual installation missing PATH setup instructions",
+          "No chmod +x instructions",
+          "No installation verification step",
+          "Unclear publication status"
+        ]
+      },
+      "easeOfConfiguration": {
+        "score": 8.0,
+        "maxScore": 10,
+        "weight": 1.0,
+        "summary": "Two configuration options provided, but no validation method and credential file format ambiguous.",
+        "strengths": [
+          "Both environment variable and password manager options",
+          "Automatic credential retrieval from OpenClaw secrets",
+          "Clear API key generation instructions"
+        ],
+        "weaknesses": [
+          "No way to test API key validity",
+          "Credential file field names not documented",
+          "No key rotation guidance"
+        ]
+      },
+      "securityConsiderations": {
+        "score": 8.0,
+        "maxScore": 10,
+        "weight": 1.2,
+        "summary": "Good security fundamentals but lacks validation, rate limit handling, and permission documentation.",
+        "strengths": [
+          "API key never hard-coded",
+          "HTTPS-only API endpoint",
+          "No logging of sensitive data",
+          "Open source transparency",
+          "Secrets file fallback to standard location"
+        ],
+        "weaknesses": [
+          "No API key validation before use",
+          "No rate limit handling",
+          "Secrets file permissions not documented",
+          "No key rotation guidance",
+          "Error messages could leak information"
+        ]
+      },
+      "errorHandling": {
+        "score": 5.5,
+        "maxScore": 10,
+        "weight": 1.2,
+        "summary": "Minimal error handling. Silent failures in list command. No HTTP status code handling. Major weakness.",
+        "strengths": [
+          "API key presence checked",
+          "Alias existence verified before operations",
+          "Required arguments validated"
+        ],
+        "weaknesses": [
+          "No HTTP error code handling (401, 403, 404, 429, 5xx)",
+          "Silent failures in list command",
+          "No retry logic",
+          "No verbose/debug mode",
+          "Generic error messages",
+          "No timeout configuration"
+        ]
+      },
+      "troubleshootingSupport": {
+        "score": 7.0,
+        "maxScore": 10,
+        "weight": 1.0,
+        "summary": "Basic troubleshooting section covers common issues but lacks comprehensive guide.",
+        "strengths": [
+          "Addresses API key, suffixes, spam issues",
+          "Clear error messages for missing API key"
+        ],
+        "weaknesses": [
+          "No troubleshooting flowchart",
+          "Limited error scenarios covered",
+          "No link to SimpleLogin status page",
+          "No FAQ section"
+        ]
+      },
+      "integrationCapabilities": {
+        "score": 8.5,
+        "maxScore": 10,
+        "weight": 1.0,
+        "summary": "Good agent integration via JSON mode. Missing export/import, health checks, and example scripts.",
+        "strengths": [
+          "JSON mode for automation",
+          "Agent-friendly design",
+          "Standard output patterns",
+          "Proper exit codes"
+        ],
+        "weaknesses": [
+          "No example integration scripts",
+          "No health check command",
+          "Limited composability (no export/import)",
+          "Pagination not implemented",
+          "No monitoring support"
+        ]
+      },
+      "codeQuality": {
+        "score": 7.5,
+        "maxScore": 10,
+        "weight": 0.8,
+        "summary": "Solid bash scripting with good structure. Lacks tests, linting, and CI/CD.",
+        "strengths": [
+          "Consistent command structure",
+          "Good use of functions",
+          "Colored output (with JSON mode override)",
+          "Smart defaults"
+        ],
+        "weaknesses": [
+          "No test suite",
+          "No linting integration",
+          "No CI/CD pipeline",
+          "Hard-coded field names without fallbacks"
+        ]
+      },
+      "featureCompleteness": {
+        "score": 7.0,
+        "maxScore": 10,
+        "weight": 0.8,
+        "summary": "Core features implemented. Missing search, bulk operations, statistics, and mailbox management.",
+        "strengths": [
+          "Custom and random alias creation",
+          "List, enable, disable, delete operations",
+          "Contact creation for reverse aliases",
+          "Multiple mailbox support",
+          "Smart hostname detection"
+        ],
+        "weaknesses": [
+          "No search/filter capability",
+          "No bulk operations",
+          "No statistics command",
+          "No mailbox management commands",
+          "No export/import",
+          "Pagination not implemented"
+        ]
+      },
+      "developerExperience": {
+        "score": 7.5,
+        "maxScore": 10,
+        "weight": 0.8,
+        "summary": "Good command structure and help text. Missing shell completion, interactive help, and example outputs.",
+        "strengths": [
+          "Consistent command patterns",
+          "Supports short and long options",
+          "Clear help message",
+          "Smart defaults"
+        ],
+        "weaknesses": [
+          "No shell completion",
+          "No command-specific help (help [command])",
+          "No example outputs in docs",
+          "Inconsistent output formats",
+          "No interactive tutorials"
+        ]
+      }
+    }
+  },
+  "weightedScore": {
+    "calculation": {
+      "documentationClarity": 8.5,
+      "documentationCompleteness": 7.5,
+      "easeOfInstallation": 6.5,
+      "easeOfConfiguration": 8.0,
+      "securityConsiderations": 9.6,
+      "errorHandling": 6.6,
+      "troubleshootingSupport": 7.0,
+      "integrationCapabilities": 8.5,
+      "codeQuality": 6.0,
+      "featureCompleteness": 5.6,
+      "developerExperience": 6.0
+    },
+    "totalWeight": 10.6,
+    "weightedAverage": 7.47
+  },
+  "verdict": {
+    "recommendation": "RECOMMENDED_WITH_CAUTION",
+    "readyFor": [
+      "Personal automation",
+      "Agent workflows",
+      "Individual developer use",
+      "Prototyping and testing"
+    ],
+    "notReadyFor": [
+      "Production deployments without improvements",
+      "Team/enterprise use",
+      "Critical workflows requiring reliability",
+      "High-volume alias management"
+    ],
+    "topPriorities": [
+      "Add API key validation command",
+      "Implement comprehensive HTTP error handling",
+      "Add curl timeout configuration",
+      "Document secure file permissions",
+      "Implement pagination for list command"
+    ]
+  },
+  "backlogSummary": {
+    "totalItems": 30,
+    "byPriority": {
+      "P0_critical": 4,
+      "P1_high": 10,
+      "P2_medium": 10,
+      "P3_low": 6
+    },
+    "estimatedTotalHours": 90,
+    "quickWins": [
+      "Document secure file permissions",
+      "Add curl timeout",
+      "Document API limitations",
+      "Add health check command",
+      "Fix placeholder URLs",
+      "Add version/changelog"
+    ]
+  },
+  "comparisonToAlternatives": {
+    "anonAddyCli": {
+      "comparison": "More mature, better testing infrastructure, similar feature set"
+    },
+    "firefoxRelay": {
+      "comparison": "No official CLI, web-only, more limited API"
+    },
+    "simpleloginAdvantages": [
+      "More feature-rich API",
+      "Better reverse alias support",
+      "Active development",
+      "Open source and self-hostable"
+    ],
+    "simpleloginDisadvantages": [
+      "Less mature than AnonAddy CLI",
+      "No official testing framework",
+      "Limited packaging options"
+    ]
+  }
+}
