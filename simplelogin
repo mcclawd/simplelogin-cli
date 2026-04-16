@@ -173,6 +173,52 @@ cmd_contact_list() {
     api_call GET "/aliases/${alias_id}/contacts?page_id=0" | jq -r '.contacts[] | "\(.contact) → \(.reverse_alias_address // .reverse_alias | gsub("[<>\"]"; ""))"' 2>/dev/null
 }
 
+cmd_validate() {
+    echo "Testing SimpleLogin API connection..."
+    
+    # Make API call with timeout to verify credentials
+    local response
+    response=$(curl -s -w "\n%{http_code}" \
+        -H "Authentication: $API_KEY" \
+        -H "Content-Type: application/json" \
+        --connect-timeout 10 \
+        --max-time 30 \
+        "${API_URL}/user_info" \
+        2>&1)
+    
+    local http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
+    
+    if [ "$http_code" = "200" ]; then
+        local email=$(echo "$body" | jq -r '.email // empty')
+        local name=$(echo "$body" | jq -r '.name // empty')
+        
+        if [ "$JSON_OUTPUT" = "true" ]; then
+            echo "{\"status\":\"success\",\"message\":\"API key is valid\",\"user\":{\"email\":\"$email\",\"name\":\"$name\"}}"
+        else
+            echo "✅ Success! API key is valid."
+            echo "   User: $name <$email>"
+        fi
+        return 0
+    else
+        local error_msg=$(echo "$body" | jq -r '.error // .message // "Unknown error"')
+        
+        if [ "$JSON_OUTPUT" = "true" ]; then
+            echo "{\"status\":\"error\",\"message\":\"API authentication failed\",\"http_code\":$http_code,\"error\":\"$error_msg\"}" >&2
+        else
+            echo "❌ Failed to validate API key." >&2
+            echo "   HTTP Status: $http_code" >&2
+            echo "   Error: $error_msg" >&2
+            echo "" >&2
+            echo "Check that:" >&2
+            echo "  - SIMPLELOGIN_API_KEY is set correctly" >&2
+            echo "  - Your API key is active in SimpleLogin dashboard" >&2
+            echo "  - You have network connectivity" >&2
+        fi
+        return 1
+    fi
+}
+
 # Main
 case "${1:-}" in
     create|new)
@@ -202,8 +248,11 @@ case "${1:-}" in
         shift
         cmd_contact_list "$@"
         ;;
+    validate|test-auth|verify)
+        cmd_validate
+        ;;
     *)
-        echo "Usage: simplelogin [create|random|list|disable|enable|contact-create|contact-list] [options]"
+        echo "Usage: simplelogin [create|random|list|disable|enable|contact-create|contact-list|validate] [options]"
         echo ""
         echo "Commands:"
         echo "  create [prefix] [--note text] [--for hostname]  Create custom alias"
@@ -213,6 +262,7 @@ case "${1:-}" in
         echo "  enable <email>                                  Enable an alias"
         echo "  contact-create <alias> <contact>                Create contact, get reverse alias"
         echo "  contact-list <alias>                            List contacts for an alias"
+        echo "  validate                                        Test API connection & verify credentials"
         echo ""
         echo "Environment:"
         echo "  SIMPLELOGIN_API_KEY    Your SimpleLogin API key"

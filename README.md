@@ -32,10 +32,13 @@ clawhub install simplelogin-cli
 ### Manual
 
 ```bash
-git clone https://github.com/yourusername/simplelogin-cli.git
+git clone https://github.com/mcclawd/simplelogin-cli.git
 cd simplelogin-cli
-# Add scripts/ to your PATH
+chmod +x simplelogin
+# Add to PATH or run with ./simplelogin
 ```
+
+**Note:** The canonical script is `simplelogin` in the repo root. This is the main CLI tool.
 
 ## Prerequisites
 
@@ -111,6 +114,23 @@ simplelogin enable shopping@yourdomain.com
 # Delete alias
 simplelogin delete shopping@yourdomain.com
 ```
+
+### Verify API Connection
+
+Before using the CLI, verify your API key works:
+
+```bash
+# Test API credentials
+simplelogin validate
+# → ✅ Success! API key is valid.
+# →    User: John Doe <john@example.com>
+
+# Also works with these aliases
+simplelogin test-auth
+simplelogin verify
+```
+
+This makes a simple API call to confirm your credentials are valid and you have network connectivity.
 
 ## Agent/JSON Mode
 

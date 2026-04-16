@@ -21,7 +21,6 @@ requires:
   env: ["SIMPLELOGIN_API_KEY"]
 files:
   - simplelogin
-  - scripts/simplelogin
   - scripts/test-reverse-alias.sh
 ---
 
