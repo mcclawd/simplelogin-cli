@@ -314,11 +314,33 @@ simplelogin create shopping --note "Test"
 # → {"email":"shopping@yourdomain.com","id":12345,"status":"created"}
 ```
 
-## Security Notes
+## Security & Privacy
+
+### Trust & Transparency
 
 - 🔐 **API keys are never stored in the skill** - Always use environment variables or password managers
 - 🔐 **Aliases are private** - SimpleLogin doesn't log or sell your data
 - 🔐 **Open source** - SimpleLogin code is auditable at https://github.com/simple-login
+- 🔐 **Self-hostable** - SimpleLogin can be self-hosted for complete control
+- 🔐 **No tracking** - This CLI does not phone home or collect telemetry
+- 🔐 **Local execution** - All API calls go directly to SimpleLogin's servers
+
+### Credential Management
+
+**Recommended:** Store your API key in a password manager like Bitwarden and use the Warden skill for retrieval. The skill supports:
+- Environment variable: `SIMPLELOGIN_API_KEY`
+- Bitwarden credential: Custom field `api_key` in item "SimpleLogin API Key"
+- Secrets file: `~/.openclaw/secrets/simplelogin.json` (fallback)
+
+### Self-Hosted SimpleLogin
+
+This CLI works with self-hosted SimpleLogin instances. Set your custom API endpoint:
+
+```bash
+export SIMPLELOGIN_API_URL="https://your-instance.com"
+```
+
+For self-hosting instructions, see https://github.com/simple-login/app
 
 ## Troubleshooting
 
